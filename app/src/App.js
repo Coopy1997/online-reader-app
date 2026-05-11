@@ -959,17 +959,29 @@ function App() {
   if (!currentUser) {
     return (
       <div className="app-shell auth-shell">
-        <div className="brand-header">
-          <div className="brand-badge">Book</div>
-          <div>
-            <h1 className="brand-title">OnlineReader</h1>
-            <p className="brand-subtitle">
-              Read beautifully. Track progress. Pick up where you left off.
-            </p>
+        <div className="auth-layout">
+          <div className="brand-header auth-brand-header">
+            <div className="brand-badge brand-badge-image">
+              <img
+                alt="OnlineReader logo"
+                className="brand-logo-image"
+                src={`${process.env.PUBLIC_URL}/photo%20logo(2).png`}
+                onError={(event) => {
+                  event.currentTarget.onerror = null
+                  event.currentTarget.src = `${process.env.PUBLIC_URL}/logo192.png`
+                }}
+              />
+            </div>
+            <div>
+              <h1 className="brand-title">OnlineReader</h1>
+              <p className="brand-subtitle">
+                Read beautifully. Track progress. Pick up where you left off.
+              </p>
+            </div>
           </div>
-        </div>
 
-        <AuthPanel onAuthSuccess={handleAuthSuccess} />
+          <AuthPanel onAuthSuccess={handleAuthSuccess} />
+        </div>
       </div>
     )
   }

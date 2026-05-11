@@ -29,6 +29,15 @@ select {
   display: flex;
   flex-direction: column;
   justify-content: center;
+  align-items: center;
+  padding-top: 56px;
+  padding-bottom: 56px;
+}
+
+.auth-layout {
+  width: min(100%, 560px);
+  display: grid;
+  gap: 26px;
 }
 
 .brand-header {
@@ -36,6 +45,13 @@ select {
   align-items: center;
   gap: 18px;
   margin-bottom: 28px;
+}
+
+.auth-brand-header {
+  margin-bottom: 0;
+  justify-content: center;
+  text-align: center;
+  flex-direction: column;
 }
 
 .brand-badge {
@@ -49,6 +65,23 @@ select {
   color: #ffffff;
   background: linear-gradient(135deg, #e50914, #b20710);
   box-shadow: 0 18px 42px rgba(229, 9, 20, 0.28);
+}
+
+.brand-badge-image {
+  width: 104px;
+  height: 104px;
+  padding: 10px;
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.18), transparent 55%),
+    linear-gradient(135deg, rgba(229, 9, 20, 0.2), rgba(178, 7, 16, 0.82));
+}
+
+.brand-logo-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  filter: drop-shadow(0 10px 16px rgba(0, 0, 0, 0.3));
 }
 
 .brand-title {
@@ -131,6 +164,7 @@ select {
   width: 100%;
   max-width: 480px;
   padding: 28px;
+  margin: 0 auto;
 }
 
 .auth-title,
