@@ -1,6 +1,7 @@
 const express = require("express")
 const cors = require("cors")
 const multer = require("multer")
+const path = require("path")
 const { BlobServiceClient } = require("@azure/storage-blob")
 const { v4: uuidv4 } = require("uuid")
 const { connectDB, sql } = require("./db")
@@ -2212,7 +2213,8 @@ app.put(
         WHERE UserId = ${req.user.userId}
       `
 
-      const avatarBlobPath = `avatars/${uuidv4()}-${avatarFile.originalname}`
+      const avatarExtension = path.extname(avatarFile.originalname || "").toLowerCase() || ".jpg"
+      const avatarBlobPath = `avatars/${uuidv4()}${avatarExtension}`
       const blockBlobClient = getContainerClient().getBlockBlobClient(avatarBlobPath)
 
       await blockBlobClient.uploadData(avatarFile.buffer, {
@@ -2224,6 +2226,7 @@ app.put(
       await sql.query`
         UPDATE UserProfiles
         SET AvatarImagePath = ${avatarBlobPath},
+            AvatarUrl = NULL,
             UpdatedAt = SYSUTCDATETIME()
         WHERE UserId = ${req.user.userId}
       `
@@ -2345,11 +2348,14 @@ app.get("/profiles/:id/avatar", async (req, res) => {
     }
 
     const blobClient = getContainerClient().getBlobClient(avatarPath)
-    const downloadResponse = await blobClient.download()
+    const [downloadResponse, properties] = await Promise.all([
+      blobClient.download(),
+      blobClient.getProperties()
+    ])
 
     res.setHeader("Content-Disposition", "inline")
     res.setHeader("Cache-Control", "no-store")
-    res.setHeader("Content-Type", downloadResponse.contentType || "image/jpeg")
+    res.setHeader("Content-Type", properties.contentType || downloadResponse.contentType || "image/jpeg")
     downloadResponse.readableStreamBody.pipe(res)
   } catch (err) {
     console.error("GET /profiles/:id/avatar error:", err)

@@ -719,6 +719,25 @@ function App() {
     }
   }
 
+  const navigateToPage = useCallback(
+    async (page) => {
+      if (document.fullscreenElement) {
+        try {
+          await document.exitFullscreen()
+        } catch (error) {
+          console.error("Failed to exit fullscreen while navigating:", error)
+        }
+      }
+
+      setIsReaderFullscreen(false)
+      setReaderSettingsOpen(false)
+      setSelectedBook(null)
+      setDetailBook(null)
+      setCurrentPageView(page)
+    },
+    []
+  )
+
   const openBook = (book, returnPage = currentPageView) => {
     setSelectedBook(book)
     setReaderReturnPage(returnPage)
@@ -734,6 +753,7 @@ function App() {
 
   const openProfilePage = useCallback(
     (userId = currentUser?.userId) => {
+      setSelectedBook(null)
       setProfileUserId(userId || currentUser?.userId || null)
       setDetailBook(null)
       setCurrentPageView("profile")
@@ -1069,10 +1089,7 @@ function App() {
           <div className="topbar-actions">
             <button
               className={`secondary-btn ${currentPageView === "library" ? "active-tab" : ""}`}
-              onClick={() => {
-                setDetailBook(null)
-                setCurrentPageView("library")
-              }}
+              onClick={() => navigateToPage("library")}
               type="button"
             >
               Library
@@ -1080,10 +1097,7 @@ function App() {
 
             <button
               className={`secondary-btn ${currentPageView === "my-list" ? "active-tab" : ""}`}
-              onClick={() => {
-                setDetailBook(null)
-                setCurrentPageView("my-list")
-              }}
+              onClick={() => navigateToPage("my-list")}
               type="button"
             >
               My List
@@ -1091,10 +1105,7 @@ function App() {
 
             <button
               className={`secondary-btn ${currentPageView === "community" ? "active-tab" : ""}`}
-              onClick={() => {
-                setDetailBook(null)
-                setCurrentPageView("community")
-              }}
+              onClick={() => navigateToPage("community")}
               type="button"
             >
               Community
@@ -1111,10 +1122,7 @@ function App() {
             {currentUser.role === "admin" && (
               <button
                 className={`secondary-btn ${currentPageView === "admin" ? "active-tab" : ""}`}
-                onClick={() => {
-                  setDetailBook(null)
-                  setCurrentPageView("admin")
-                }}
+                onClick={() => navigateToPage("admin")}
                 type="button"
               >
                 Admin Panel
@@ -2272,6 +2280,7 @@ function App() {
           ref={readerShellRef}
           className={`reader-shell ${isReaderFullscreen ? "reader-shell-fullscreen" : ""}`}
         >
+          {!isReaderFullscreen && (
           <div className="reader-header reader-toolbar">
             <div className="reader-toolbar-left">
               <button className="secondary-btn" onClick={closeBook} type="button">
@@ -2301,8 +2310,17 @@ function App() {
               </button>
             </div>
           </div>
+          )}
 
-          {readerSettingsOpen && (
+          {isReaderFullscreen && (
+            <div className="reader-fullscreen-exit">
+              <button className="secondary-btn" onClick={toggleFullscreen} type="button">
+                X
+              </button>
+            </div>
+          )}
+
+          {readerSettingsOpen && !isReaderFullscreen && (
             <div className="reader-settings-panel">
               {selectedBook.FileType === "pdf" && (
                 <div className="reader-settings-grid">
@@ -2402,6 +2420,7 @@ function App() {
 
           {selectedBook.FileType === "pdf" && (
             <div ref={readerContentRef} className="reader-card reader-content-shell">
+              {!isReaderFullscreen && (
               <div className="reader-controls reader-controls-top">
                 <button
                   className="secondary-btn"
@@ -2443,6 +2462,7 @@ function App() {
                     : ""}
                 </div>
               </div>
+              )}
 
               <div
                 ref={pdfWrapRef}
@@ -2464,12 +2484,29 @@ function App() {
                     error={<p>Failed to load PDF.</p>}
                     externalLinkTarget="_self"
                   >
-                    <Page
-                      pageNumber={currentPage}
-                      width={Math.round((isReaderFullscreen ? 1000 : 800) * readerSettings.pdfScale)}
-                      renderAnnotationLayer={true}
-                      renderTextLayer={true}
-                    />
+                    <div
+                      className={`pdf-page-click-zone ${isReaderFullscreen ? "pdf-page-click-zone-fullscreen" : ""}`}
+                      onClick={(event) => {
+                        if (!isReaderFullscreen) return
+
+                        const bounds = event.currentTarget.getBoundingClientRect()
+                        const clickedLeft = event.clientX - bounds.left < bounds.width / 2
+
+                        if (clickedLeft) {
+                          goToPreviousPage()
+                        } else {
+                          goToNextPage()
+                        }
+                      }}
+                      role="presentation"
+                    >
+                      <Page
+                        pageNumber={currentPage}
+                        width={Math.round((isReaderFullscreen ? 1000 : 800) * readerSettings.pdfScale)}
+                        renderAnnotationLayer={true}
+                        renderTextLayer={true}
+                      />
+                    </div>
                   </Document>
                 )}
               </div>

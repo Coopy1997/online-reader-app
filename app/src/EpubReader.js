@@ -227,6 +227,7 @@ export default function EpubReader({
 
   return (
     <div className={`epub-reader-shell ${isFullscreen ? "epub-reader-shell-fullscreen" : ""}`}>
+      {!isFullscreen && (
       <div className="reader-controls reader-controls-top epub-toolbar">
         <div className="epub-toolbar-left">
           <button className="secondary-btn" onClick={() => setShowToc((prev) => !prev)}>
@@ -253,9 +254,10 @@ export default function EpubReader({
           <div className="progress-text">{progressPercent.toFixed(1)}% read</div>
         </div>
       </div>
+      )}
 
-      <div className={`epub-layout ${showToc ? "" : "epub-layout-wide"}`}>
-        {showToc && (
+      <div className={`epub-layout ${showToc && !isFullscreen ? "" : "epub-layout-wide"}`}>
+        {showToc && !isFullscreen && (
           <aside className="epub-sidebar">
             <div className="epub-sidebar-title">Contents</div>
 

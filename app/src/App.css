@@ -1072,6 +1072,7 @@ select {
   padding: 18px;
   min-height: 100vh;
   overflow: auto;
+  max-width: none;
 }
 
 .reader-header,
@@ -1133,6 +1134,13 @@ select {
   min-height: 0;
 }
 
+.reader-fullscreen-exit {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 50;
+}
+
 .pdf-wrap {
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: #181818;
@@ -1144,6 +1152,15 @@ select {
   overflow: auto;
   margin: 0 auto;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.pdf-page-click-zone {
+  display: flex;
+  justify-content: center;
+}
+
+.pdf-page-click-zone-fullscreen {
+  cursor: pointer;
 }
 
 .reader-controls-top {
@@ -1209,7 +1226,7 @@ select {
 }
 
 .epub-reader-shell-fullscreen {
-  min-height: calc(100vh - 120px);
+  min-height: 100vh;
 }
 
 .reader-book-mini {
