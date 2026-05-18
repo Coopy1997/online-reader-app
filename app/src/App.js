@@ -243,6 +243,38 @@ function renderDisplayName(name, role, leaderboardRank) {
   return `${isAdmin ? "🛡️ " : ""}${podiumIcon ? `${podiumIcon} ` : ""}${name}`
 }
 
+function AvatarImage({
+  alt,
+  className = "",
+  fallbackText = "R",
+  sources = []
+}) {
+  const validSources = sources.filter(Boolean)
+  const sourcesKey = validSources.join("|")
+  const [sourceIndex, setSourceIndex] = useState(0)
+
+  useEffect(() => {
+    setSourceIndex(0)
+  }, [sourcesKey])
+
+  const activeSource = validSources[sourceIndex]
+
+  if (!activeSource) {
+    return <span>{fallbackText}</span>
+  }
+
+  return (
+    <img
+      alt={alt}
+      className={className}
+      src={activeSource}
+      onError={() => {
+        setSourceIndex((current) => current + 1)
+      }}
+    />
+  )
+}
+
 function App() {
   const [books, setBooks] = useState([])
   const [selectedBook, setSelectedBook] = useState(null)
@@ -283,7 +315,13 @@ function App() {
     monthlyBooksGoal: 2
   })
   const [avatarUploadFile, setAvatarUploadFile] = useState(null)
+  const [avatarUploadMessage, setAvatarUploadMessage] = useState("")
   const [profileEditorOpen, setProfileEditorOpen] = useState(false)
+  const [profileSaveMessage, setProfileSaveMessage] = useState("")
+  const [profileSavePending, setProfileSavePending] = useState(false)
+  const [goalSaveMessage, setGoalSaveMessage] = useState("")
+  const [goalSavePending, setGoalSavePending] = useState(false)
+  const [followPending, setFollowPending] = useState(false)
   const [myListBooks, setMyListBooks] = useState([])
   const [communityFeed, setCommunityFeed] = useState([])
   const [leaderboard, setLeaderboard] = useState([])
@@ -308,6 +346,7 @@ function App() {
 
   const token = getToken()
   const readerShellRef = useRef(null)
+  const readerContentRef = useRef(null)
   const pdfWrapRef = useRef(null)
   const pendingPdfScrollTopRef = useRef(null)
 
@@ -668,8 +707,8 @@ function App() {
 
   const toggleFullscreen = async () => {
     try {
-      if (!document.fullscreenElement && readerShellRef.current) {
-        await readerShellRef.current.requestFullscreen()
+      if (!document.fullscreenElement && readerContentRef.current) {
+        await readerContentRef.current.requestFullscreen()
         setIsReaderFullscreen(true)
       } else {
         await document.exitFullscreen()
@@ -752,21 +791,33 @@ function App() {
 
   const handleSaveProfile = useCallback(async () => {
     try {
+      setProfileSavePending(true)
+      setProfileSaveMessage("")
       await updateMyProfile(profileForm)
       const data = await getMyProfile()
       setProfileData(data)
+      setProfileSaveMessage("Profile saved successfully.")
     } catch (error) {
       console.error("Failed to save profile:", error)
+      setProfileSaveMessage(error.message || "Failed to save profile.")
+    } finally {
+      setProfileSavePending(false)
     }
   }, [profileForm])
 
   const handleSaveGoals = useCallback(async () => {
     try {
+      setGoalSavePending(true)
+      setGoalSaveMessage("")
       await updateMyGoals(goalForm)
       const data = await getMyProfile()
       setProfileData(data)
+      setGoalSaveMessage("Reading goals updated.")
     } catch (error) {
       console.error("Failed to save goals:", error)
+      setGoalSaveMessage(error.message || "Failed to save goals.")
+    } finally {
+      setGoalSavePending(false)
     }
   }, [goalForm])
 
@@ -774,12 +825,15 @@ function App() {
     if (!avatarUploadFile) return
 
     try {
+      setAvatarUploadMessage("")
       await uploadMyAvatar(avatarUploadFile)
       const data = await getMyProfile()
       setProfileData(data)
       setAvatarUploadFile(null)
+      setAvatarUploadMessage("Avatar uploaded successfully.")
     } catch (error) {
       console.error("Failed to upload avatar:", error)
+      setAvatarUploadMessage(error.message || "Failed to upload avatar.")
     }
   }, [avatarUploadFile])
 
@@ -787,6 +841,7 @@ function App() {
     if (!profileData?.profile?.UserId || profileData.isCurrentUser) return
 
     try {
+      setFollowPending(true)
       if (profileData.isFollowing) {
         await unfollowUser(profileData.profile.UserId)
       } else {
@@ -797,6 +852,8 @@ function App() {
       setProfileData(refreshed)
     } catch (error) {
       console.error("Failed to update follow state:", error)
+    } finally {
+      setFollowPending(false)
     }
   }, [profileData])
 
@@ -1225,15 +1282,17 @@ function App() {
                       <div className="community-feed-head">
                         <div className="community-avatar">
                           {(activity.AvatarImagePath || activity.AvatarUrl) ? (
-                            <img
+                            <AvatarImage
                               alt={getUserDisplayName(activity, activity.Email)}
-                              src={
+                              fallbackText={(activity.DisplayName || activity.Email || "R").slice(0, 1)}
+                              sources={[
                                 activity.AvatarImagePath
                                   ? `${API_BASE}/profiles/${activity.UserId}/avatar?v=${encodeURIComponent(
                                       activity.ProfileUpdatedAt || activity.AvatarImagePath || "avatar"
                                     )}`
-                                  : activity.AvatarUrl
-                              }
+                                  : "",
+                                activity.AvatarUrl
+                              ]}
                             />
                           ) : (
                             <span>
@@ -1288,15 +1347,17 @@ function App() {
                       <div className="leaderboard-main">
                         <div className="community-avatar">
                           {(entry.avatarImagePath || entry.avatarUrl) ? (
-                            <img
+                            <AvatarImage
                               alt={entry.displayName}
-                              src={
+                              fallbackText={(entry.displayName || "R").slice(0, 1)}
+                              sources={[
                                 entry.avatarImagePath
                                   ? `${API_BASE}/profiles/${entry.userId}/avatar?v=${encodeURIComponent(
                                       entry.profileUpdatedAt || entry.avatarImagePath || "avatar"
                                     )}`
-                                  : entry.avatarUrl
-                              }
+                                  : "",
+                                entry.avatarUrl
+                              ]}
                             />
                           ) : (
                             <span>{(entry.displayName || "R").slice(0, 1)}</span>
@@ -1350,10 +1411,16 @@ function App() {
               <section className="profile-hero">
                 <div className="profile-avatar">
                   {getProfileAvatarSrcWithCache(profileData.profile) ? (
-                    <img
+                    <AvatarImage
                       alt={profileData.profile?.DisplayName || "Profile avatar"}
                       className="profile-avatar-image"
-                      src={getProfileAvatarSrcWithCache(profileData.profile)}
+                      fallbackText={(profileData.profile?.DisplayName || profileData.profile?.Email || "R")
+                        .slice(0, 1)
+                        .toUpperCase()}
+                      sources={[
+                        getProfileAvatarSrcWithCache(profileData.profile),
+                        profileData.profile?.AvatarUrl
+                      ]}
                     />
                   ) : (
                     <span>
@@ -1425,14 +1492,23 @@ function App() {
                   </div>
 
                   {!profileData.isCurrentUser && (
-                    <button className="primary-btn" onClick={handleToggleFollow} type="button">
-                      {profileData.isFollowing ? "Unfollow" : "Follow"}
+                    <button
+                      className={`primary-btn ${followPending ? "button-pulse" : ""}`}
+                      onClick={handleToggleFollow}
+                      type="button"
+                      disabled={followPending}
+                    >
+                      {followPending
+                        ? "Updating..."
+                        : profileData.isFollowing
+                          ? "Unfollow"
+                          : "Follow"}
                     </button>
                   )}
 
                   {profileData.isCurrentUser && (
                     <button
-                      className="secondary-btn"
+                      className={`secondary-btn ${profileEditorOpen ? "active-tab" : ""}`}
                       onClick={() => setProfileEditorOpen((current) => !current)}
                       type="button"
                     >
@@ -1514,7 +1590,28 @@ function App() {
               </div>
 
               {profileData.isCurrentUser && profileEditorOpen && (
-                <div className="profile-grid">
+                <div className="modal-overlay" onClick={() => setProfileEditorOpen(false)}>
+                  <div
+                    className="modal-card modal-card-wide profile-settings-modal"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="section-header">
+                      <div>
+                        <h3 className="section-title">Customize Profile</h3>
+                        <p className="admin-modal-subtitle">
+                          Update your public profile, avatar, title, and goals.
+                        </p>
+                      </div>
+                      <button
+                        className="secondary-btn"
+                        onClick={() => setProfileEditorOpen(false)}
+                        type="button"
+                      >
+                        Close
+                      </button>
+                    </div>
+
+                    <div className="profile-grid">
                   <section className="community-card">
                     <h3 className="community-title">Customize Profile</h3>
                     <div className="admin-form">
@@ -1570,6 +1667,17 @@ function App() {
                         >
                           Upload Avatar
                         </button>
+                        {avatarUploadMessage ? (
+                          <p
+                            className={
+                              avatarUploadMessage.toLowerCase().includes("success")
+                                ? "message-text"
+                                : "error-text"
+                            }
+                          >
+                            {avatarUploadMessage}
+                          </p>
+                        ) : null}
                       </div>
                       <select
                         className="toolbar-select"
@@ -1610,8 +1718,24 @@ function App() {
                           }))
                         }
                       />
-                      <button className="primary-btn" onClick={handleSaveProfile} type="button">
-                        Save Profile
+                      {profileSaveMessage ? (
+                        <p
+                          className={
+                            profileSaveMessage.toLowerCase().includes("success")
+                              ? "message-text"
+                              : "error-text"
+                          }
+                        >
+                          {profileSaveMessage}
+                        </p>
+                      ) : null}
+                      <button
+                        className={`primary-btn ${profileSavePending ? "button-pulse" : ""}`}
+                        onClick={handleSaveProfile}
+                        type="button"
+                        disabled={profileSavePending}
+                      >
+                        {profileSavePending ? "Saving..." : "Save Profile"}
                       </button>
                     </div>
                   </section>
@@ -1657,11 +1781,29 @@ function App() {
                         Weekly days goal tracks how many separate days you read in a rolling 7 day
                         window. Monthly books goal tracks completed books this calendar month.
                       </p>
-                      <button className="primary-btn" onClick={handleSaveGoals} type="button">
-                        Save Goals
+                      {goalSaveMessage ? (
+                        <p
+                          className={
+                            goalSaveMessage.toLowerCase().includes("updated")
+                              ? "message-text"
+                              : "error-text"
+                          }
+                        >
+                          {goalSaveMessage}
+                        </p>
+                      ) : null}
+                      <button
+                        className={`primary-btn ${goalSavePending ? "button-pulse" : ""}`}
+                        onClick={handleSaveGoals}
+                        type="button"
+                        disabled={goalSavePending}
+                      >
+                        {goalSavePending ? "Saving..." : "Save Goals"}
                       </button>
                     </div>
                   </section>
+                    </div>
+                  </div>
                 </div>
               )}
             </>
@@ -1788,9 +1930,13 @@ function App() {
                           <div className="review-author-block">
                             <div className="community-avatar community-avatar-sm">
                               {(review.AvatarImagePath || review.AvatarUrl) ? (
-                                <img
+                                <AvatarImage
                                   alt={getUserDisplayName(review, review.Email)}
-                                  src={getProfileAvatarSrcWithCache(review)}
+                                  fallbackText={getUserDisplayName(review, review.Email).slice(0, 1)}
+                                  sources={[
+                                    getProfileAvatarSrcWithCache(review),
+                                    review.AvatarUrl
+                                  ]}
                                 />
                               ) : (
                                 <span>{getUserDisplayName(review, review.Email).slice(0, 1)}</span>
@@ -2255,7 +2401,7 @@ function App() {
           )}
 
           {selectedBook.FileType === "pdf" && (
-            <div className="reader-card">
+            <div ref={readerContentRef} className="reader-card reader-content-shell">
               <div className="reader-controls reader-controls-top">
                 <button
                   className="secondary-btn"
@@ -2331,7 +2477,7 @@ function App() {
           )}
 
           {selectedBook.FileType === "epub" && (
-            <div className="reader-card">
+            <div ref={readerContentRef} className="reader-card reader-content-shell">
               <EpubReader
                 bookId={selectedBook.BookId}
                 bookTitle={selectedBook.Title}

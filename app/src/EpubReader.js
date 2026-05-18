@@ -191,6 +191,22 @@ export default function EpubReader({
     return () => window.removeEventListener("keydown", onKeyDown)
   }, [])
 
+  useEffect(() => {
+    if (!renditionRef.current) return
+
+    const resizeFrame = window.requestAnimationFrame(() => {
+      try {
+        renditionRef.current.resize()
+      } catch (error) {
+        console.error("Failed to resize EPUB rendition:", error)
+      }
+    })
+
+    return () => {
+      window.cancelAnimationFrame(resizeFrame)
+    }
+  }, [showToc, isFullscreen])
+
   const goNext = () => {
     if (renditionRef.current) {
       renditionRef.current.next()
@@ -238,7 +254,7 @@ export default function EpubReader({
         </div>
       </div>
 
-      <div className="epub-layout">
+      <div className={`epub-layout ${showToc ? "" : "epub-layout-wide"}`}>
         {showToc && (
           <aside className="epub-sidebar">
             <div className="epub-sidebar-title">Contents</div>

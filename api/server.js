@@ -2203,6 +2203,7 @@ app.put(
 
       await connectDB()
       await ensureSocialPhase2Schema()
+      await ensureSocialPhase3Schema()
       await ensureUserProfile(req.user.userId, req.user.email)
 
       const existingResult = await sql.query`
@@ -2328,6 +2329,8 @@ app.get("/profiles/:id/avatar", async (req, res) => {
     }
 
     await connectDB()
+    await ensureSocialPhase2Schema()
+    await ensureSocialPhase3Schema()
 
     const result = await sql.query`
       SELECT AvatarImagePath
