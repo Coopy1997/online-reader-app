@@ -29,6 +29,7 @@ import {
   getStoredUser,
   getToken,
   removeBookFromMyList,
+  requestBlob,
   saveBookReview,
   saveProgress,
   subscribeToUnauthorized,
@@ -247,19 +248,67 @@ function AvatarImage({
   alt,
   className = "",
   fallbackText = "R",
-  sources = []
+  sources = [],
+  prioritizeLoadedSource = false
 }) {
-  const validSources = sources.filter(Boolean)
+  const validSources = useMemo(() => sources.filter(Boolean), [sources])
   const sourcesKey = validSources.join("|")
   const [sourceIndex, setSourceIndex] = useState(0)
+  const [blobUrl, setBlobUrl] = useState("")
 
   useEffect(() => {
     setSourceIndex(0)
   }, [sourcesKey])
 
-  const activeSource = validSources[sourceIndex]
+  useEffect(() => {
+    let cancelled = false
+    let objectUrlToRevoke = ""
+
+    async function loadBlobSource() {
+      const activeSource = validSources[sourceIndex]
+
+      if (!activeSource || !activeSource.startsWith(API_BASE)) {
+        setBlobUrl("")
+        return
+      }
+
+      try {
+        const relativePath = activeSource.replace(API_BASE, "")
+        const blob = await requestBlob(relativePath)
+        objectUrlToRevoke = URL.createObjectURL(blob)
+
+        if (!cancelled) {
+          setBlobUrl(objectUrlToRevoke)
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setBlobUrl("")
+          setSourceIndex((current) => current + 1)
+        }
+      }
+    }
+
+    loadBlobSource()
+
+    return () => {
+      cancelled = true
+      if (objectUrlToRevoke) {
+        URL.revokeObjectURL(objectUrlToRevoke)
+      }
+    }
+  }, [sourceIndex, sourcesKey, validSources])
+
+  const activeSource = prioritizeLoadedSource
+    ? validSources.find((source) => !source.startsWith(API_BASE)) || validSources[sourceIndex]
+    : validSources[sourceIndex]
+  const resolvedSource =
+    activeSource && activeSource.startsWith(API_BASE) ? blobUrl : activeSource
 
   if (!activeSource) {
+    return <span>{fallbackText}</span>
+  }
+
+  if (activeSource.startsWith(API_BASE) && !resolvedSource) {
     return <span>{fallbackText}</span>
   }
 
@@ -267,7 +316,7 @@ function AvatarImage({
     <img
       alt={alt}
       className={className}
-      src={activeSource}
+      src={resolvedSource}
       onError={() => {
         setSourceIndex((current) => current + 1)
       }}
@@ -288,6 +337,7 @@ function App() {
   const [savedProgress, setSavedProgress] = useState(null)
   const [pdfReady, setPdfReady] = useState(false)
   const [pdfPageInput, setPdfPageInput] = useState("1")
+  const [pdfRenderWidth, setPdfRenderWidth] = useState(800)
   const [isReaderFullscreen, setIsReaderFullscreen] = useState(false)
   const [readingProgress, setReadingProgress] = useState({
     format: "",
@@ -316,6 +366,7 @@ function App() {
   })
   const [avatarUploadFile, setAvatarUploadFile] = useState(null)
   const [avatarUploadMessage, setAvatarUploadMessage] = useState("")
+  const [localAvatarPreviewUrl, setLocalAvatarPreviewUrl] = useState("")
   const [profileEditorOpen, setProfileEditorOpen] = useState(false)
   const [profileSaveMessage, setProfileSaveMessage] = useState("")
   const [profileSavePending, setProfileSavePending] = useState(false)
@@ -349,6 +400,14 @@ function App() {
   const readerContentRef = useRef(null)
   const pdfWrapRef = useRef(null)
   const pendingPdfScrollTopRef = useRef(null)
+
+  useEffect(() => {
+    return () => {
+      if (localAvatarPreviewUrl?.startsWith("blob:")) {
+        URL.revokeObjectURL(localAvatarPreviewUrl)
+      }
+    }
+  }, [localAvatarPreviewUrl])
 
   const resetReaderState = useCallback(() => {
     setSelectedBook(null)
@@ -589,6 +648,25 @@ function App() {
       document.removeEventListener("fullscreenchange", onFullscreenChange)
     }
   }, [])
+
+  useEffect(() => {
+    if (!selectedBook || selectedBook.FileType !== "pdf") return
+
+    const updatePdfWidth = () => {
+      const containerWidth = readerContentRef.current?.clientWidth || 0
+      const nextWidth = isReaderFullscreen
+        ? Math.max(320, Math.floor(window.innerWidth - 24))
+        : Math.max(320, Math.floor(containerWidth - 88))
+      setPdfRenderWidth(nextWidth || 800)
+    }
+
+    updatePdfWidth()
+    window.addEventListener("resize", updatePdfWidth)
+
+    return () => {
+      window.removeEventListener("resize", updatePdfWidth)
+    }
+  }, [selectedBook, isReaderFullscreen])
 
   const pdfFileUrl = useMemo(() => {
     if (!selectedBook || selectedBook.FileType !== "pdf") return null
@@ -846,16 +924,28 @@ function App() {
 
     try {
       setAvatarUploadMessage("")
+      if (localAvatarPreviewUrl?.startsWith("blob:")) {
+        URL.revokeObjectURL(localAvatarPreviewUrl)
+      }
       await uploadMyAvatar(avatarUploadFile)
+      const previewUrl = URL.createObjectURL(avatarUploadFile)
       const data = await getMyProfile()
-      setProfileData(data)
+      setLocalAvatarPreviewUrl(previewUrl)
+      setProfileData({
+        ...data,
+        profile: {
+          ...data.profile,
+          AvatarUrl: previewUrl,
+          ProfileUpdatedAt: new Date().toISOString()
+        }
+      })
       setAvatarUploadFile(null)
       setAvatarUploadMessage("Avatar uploaded successfully.")
     } catch (error) {
       console.error("Failed to upload avatar:", error)
       setAvatarUploadMessage(error.message || "Failed to upload avatar.")
     }
-  }, [avatarUploadFile])
+  }, [avatarUploadFile, localAvatarPreviewUrl])
 
   const handleToggleFollow = useCallback(async () => {
     if (!profileData?.profile?.UserId || profileData.isCurrentUser) return
@@ -1418,7 +1508,7 @@ function App() {
             <>
               <section className="profile-hero">
                 <div className="profile-avatar">
-                  {getProfileAvatarSrcWithCache(profileData.profile) ? (
+                  {getProfileAvatarSrcWithCache(profileData.profile) || localAvatarPreviewUrl ? (
                     <AvatarImage
                       alt={profileData.profile?.DisplayName || "Profile avatar"}
                       className="profile-avatar-image"
@@ -1426,9 +1516,11 @@ function App() {
                         .slice(0, 1)
                         .toUpperCase()}
                       sources={[
+                        localAvatarPreviewUrl,
                         getProfileAvatarSrcWithCache(profileData.profile),
                         profileData.profile?.AvatarUrl
                       ]}
+                      prioritizeLoadedSource={Boolean(localAvatarPreviewUrl)}
                     />
                   ) : (
                     <span>
@@ -2466,8 +2558,29 @@ function App() {
 
               <div
                 ref={pdfWrapRef}
-                className={`pdf-wrap pdf-theme-${readerSettings.pdfTheme}`}
+                className={`pdf-wrap pdf-theme-${readerSettings.pdfTheme} ${isReaderFullscreen ? "pdf-wrap-fullscreen" : ""}`}
               >
+                {isReaderFullscreen && (
+                  <>
+                    <div
+                      className="pdf-fullscreen-nav pdf-fullscreen-nav-left"
+                      onClick={goToPreviousPage}
+                      onMouseDown={(event) => event.preventDefault()}
+                      role="presentation"
+                    >
+                      &nbsp;
+                    </div>
+                    <div
+                      className="pdf-fullscreen-nav pdf-fullscreen-nav-right"
+                      onClick={goToNextPage}
+                      onMouseDown={(event) => event.preventDefault()}
+                      role="presentation"
+                    >
+                      &nbsp;
+                    </div>
+                  </>
+                )}
+
                 {!pdfReady && (
                   <div className="reader-loading-overlay">
                     <div className="reader-spinner" />
@@ -2484,25 +2597,10 @@ function App() {
                     error={<p>Failed to load PDF.</p>}
                     externalLinkTarget="_self"
                   >
-                    <div
-                      className={`pdf-page-click-zone ${isReaderFullscreen ? "pdf-page-click-zone-fullscreen" : ""}`}
-                      onClick={(event) => {
-                        if (!isReaderFullscreen) return
-
-                        const bounds = event.currentTarget.getBoundingClientRect()
-                        const clickedLeft = event.clientX - bounds.left < bounds.width / 2
-
-                        if (clickedLeft) {
-                          goToPreviousPage()
-                        } else {
-                          goToNextPage()
-                        }
-                      }}
-                      role="presentation"
-                    >
+                    <div className="pdf-page-click-zone" role="presentation">
                       <Page
                         pageNumber={currentPage}
-                        width={Math.round((isReaderFullscreen ? 1000 : 800) * readerSettings.pdfScale)}
+                        width={Math.round(pdfRenderWidth * readerSettings.pdfScale)}
                         renderAnnotationLayer={true}
                         renderTextLayer={true}
                       />

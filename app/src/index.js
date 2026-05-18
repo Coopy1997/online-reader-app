@@ -5,6 +5,11 @@ import "./index.css"
 import App from "./App"
 import reportWebVitals from "./reportWebVitals"
 
+const RESIZE_OBSERVER_MESSAGES = new Set([
+  "ResizeObserver loop completed with undelivered notifications.",
+  "ResizeObserver loop limit exceeded"
+])
+
 if (typeof window !== "undefined" && "ResizeObserver" in window) {
   const NativeResizeObserver = window.ResizeObserver
 
@@ -19,22 +24,29 @@ if (typeof window !== "undefined" && "ResizeObserver" in window) {
   }
 }
 
-window.addEventListener("error", (event) => {
-  if (
-    event.message === "ResizeObserver loop completed with undelivered notifications." ||
-    event.message === "ResizeObserver loop limit exceeded"
-  ) {
-    event.stopImmediatePropagation()
+const originalConsoleError = console.error
+
+console.error = (...args) => {
+  const firstMessage = typeof args[0] === "string" ? args[0] : ""
+
+  if (RESIZE_OBSERVER_MESSAGES.has(firstMessage)) {
+    return
   }
-})
+
+  originalConsoleError(...args)
+}
+
+window.addEventListener("error", (event) => {
+  if (RESIZE_OBSERVER_MESSAGES.has(event.message)) {
+    event.stopImmediatePropagation()
+    event.preventDefault()
+  }
+}, true)
 
 window.addEventListener("unhandledrejection", (event) => {
   const message = event.reason?.message || ""
 
-  if (
-    message === "ResizeObserver loop completed with undelivered notifications." ||
-    message === "ResizeObserver loop limit exceeded"
-  ) {
+  if (RESIZE_OBSERVER_MESSAGES.has(message)) {
     event.preventDefault()
   }
 })
