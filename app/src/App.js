@@ -655,7 +655,7 @@ function App() {
     const updatePdfWidth = () => {
       const containerWidth = readerContentRef.current?.clientWidth || 0
       const nextWidth = isReaderFullscreen
-        ? Math.max(320, Math.floor(window.innerWidth - 24))
+        ? Math.max(320, Math.min(1120, Math.floor(window.innerWidth - 120)))
         : Math.max(320, Math.floor(containerWidth - 88))
       setPdfRenderWidth(nextWidth || 800)
     }
